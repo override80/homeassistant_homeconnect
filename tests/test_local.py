@@ -92,6 +92,134 @@ def test_the_commands_are_kept_apart_from_the_settings() -> None:
     assert "BSH.Common.Command.AcknowledgeEvent" not in DESCRIBED.settings
 
 
+PAUSE = 0x0219
+ECO = 0x7267
+FINISH_IN = 0x0227
+
+
+def _like_a_washer() -> dict[int, iddf.Entry]:
+    """What a Bosch washer writes: every programme unavailable, the option it
+    runs with locked at the root and open under the programme, and pause
+    locked until it is running."""
+    entries = dict(ENTRIES)
+    entries[PAUSE] = iddf.Entry(
+        PAUSE, "command", "BSH.Common.Command.PauseProgram", access="none"
+    )
+    entries[ECO] = iddf.Entry(
+        ECO, "program", "LaundryCare.Washer.Program.Eco4060", available=False
+    )
+    entries[FINISH_IN] = iddf.Entry(
+        FINISH_IN,
+        "option",
+        "BSH.Common.Option.FinishInRelative",
+        access="none",
+        minimum=0,
+        maximum=86400,
+        step=60,
+    )
+    made = (ECO << 16) | FINISH_IN
+    entries[made] = iddf.Entry(
+        made,
+        "option",
+        "BSH.Common.Option.FinishInRelative",
+        access="readWrite",
+        under=ECO,
+    )
+    return entries
+
+
+def test_a_command_it_will_not_take_is_not_offered() -> None:
+    """Pause written "none" is refused with a 400 until the appliance says
+    otherwise, so it is not offered until then."""
+    described = local.describe(_like_a_washer())
+    assert "BSH.Common.Command.PauseProgram" not in described.commands
+
+
+def test_a_programme_written_unavailable_is_offered_once_turned_on() -> None:
+    entries = _like_a_washer()
+    assert "LaundryCare.Washer.Program.Eco4060" not in local.describe(entries).programs
+
+    changed = local.changed(entries, {ECO: {"available": True}})
+    described = local.describe(changed)
+    assert "LaundryCare.Washer.Program.Eco4060" in described.programs
+    finish = described.options["LaundryCare.Washer.Program.Eco4060"][
+        "BSH.Common.Option.FinishInRelative"
+    ]
+    # Writable as the programme says, over the root's range.
+    assert finish.access == "readWrite"
+    assert (finish.minimum, finish.maximum, finish.step) == (0, 86400, 60)
+
+
+def test_a_command_turned_on_is_offered() -> None:
+    changed = local.changed(_like_a_washer(), {PAUSE: {"access": "writeOnly"}})
+    assert "BSH.Common.Command.PauseProgram" in local.describe(changed).commands
+
+
+def test_a_change_moves_only_what_it_names() -> None:
+    entries = _like_a_washer()
+    changed = local.changed(
+        entries,
+        {
+            FINISH_IN: {"max": 43200, "stepSize": 300},
+            # Not what a description would write there, so left alone.
+            ECO: {"available": "true", "access": 3},
+            # A number never described has nothing to change.
+            0xBEEF: {"available": True},
+        },
+    )
+    assert changed[FINISH_IN].maximum == 43200
+    assert changed[FINISH_IN].step == 300
+    assert changed[FINISH_IN].minimum == 0
+    assert changed[FINISH_IN].access == "none"
+    assert changed[ECO] == entries[ECO]
+    assert 0xBEEF not in changed
+    # What was learnt is not touched.
+    assert entries[FINISH_IN].maximum == 86400
+
+
+def _told_into(told: list[str]) -> local.LocalControl:
+    return local.LocalControl(
+        cast(HomeAssistant, None),
+        object(),
+        None,
+        None,
+        lambda *_a: None,
+        lambda *_a: None,
+        on_described=told.append,
+    )
+
+
+def test_every_change_at_once_stands_in_for_what_came_before() -> None:
+    """The answer to asking for every change starts again from the file, so
+    something the appliance has since turned back off does not linger. A
+    change on its own lands on top of what is already said."""
+    told: list[str] = []
+    control = _told_into(told)
+    control._known[HAID] = local.Known(key="AAAA", iv=None, entries=_like_a_washer())
+
+    control.described_changes(HAID, {ECO: {"available": True}}, whole=True)
+    control.described_changes(HAID, {PAUSE: {"access": "writeOnly"}}, whole=False)
+    described = control.described(HAID)
+    assert "LaundryCare.Washer.Program.Eco4060" in described.programs
+    assert "BSH.Common.Command.PauseProgram" in described.commands
+
+    control.described_changes(HAID, {}, whole=True)
+    described = control.described(HAID)
+    assert "LaundryCare.Washer.Program.Eco4060" not in described.programs
+    assert "BSH.Common.Command.PauseProgram" not in described.commands
+    assert told == [HAID, HAID, HAID]
+    # Never written down: the file as learnt is what is kept.
+    assert not control._known[HAID].entries[ECO].available
+
+
+def test_a_change_for_an_appliance_never_learnt_is_passed_over() -> None:
+    told: list[str] = []
+    control = _told_into(told)
+    control.described_changes(HAID, {ECO: {"available": True}}, whole=True)
+    assert told == []
+    assert control.entries(HAID) == {}
+
+
 def test_what_it_is_holding_is_sorted_the_way_the_cloud_sorts_it() -> None:
     found = local.sort(ENTRIES, {0x0100: 2, 0x0101: 5, 0x0102: True, 0x0103: 7})
     assert found.settings["BSH.Common.Setting.PowerState"].value == (

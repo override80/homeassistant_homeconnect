@@ -533,6 +533,53 @@ async def test_what_is_said_is_read_out_of_either_kind_of_frame(
     assert seen == [{256: 3}, {256: 3}]
 
 
+async def test_what_changed_in_the_description_is_handed_on(
+    session: aiohttp.ClientSession,
+) -> None:
+    """Every change at once is the answer asked for on connect and stands in
+    for what came before; one pushed later is a change on its own."""
+    told: list[tuple[dict[int, dict[str, Any]], bool]] = []
+    link = HcpLink(
+        session,
+        "hob",
+        KEY,
+        None,
+        lambda _v: None,
+        lambda _c: None,
+        on_described=lambda changes, whole: told.append((changes, whole)),
+    )
+    for resource, action, data in (
+        (
+            "/ro/allDescriptionChanges",
+            "RESPONSE",
+            [{"uid": 0x7267, "available": True}, {"available": True}],
+        ),
+        ("/ro/descriptionChange", "NOTIFY", [{"uid": 0x0219, "access": "writeOnly"}]),
+        # Nothing to say is still every change there is.
+        ("/ro/allDescriptionChanges", "RESPONSE", []),
+        # And a change saying nothing is not one.
+        ("/ro/descriptionChange", "NOTIFY", []),
+    ):
+        said = json.dumps(
+            {
+                "sID": 1,
+                "msgID": 1,
+                "resource": resource,
+                "version": 1,
+                "action": action,
+                "data": data,
+            }
+        )
+        await link._heard(
+            aiohttp.WSMessage(type=aiohttp.WSMsgType.TEXT, data=said, extra=None)
+        )
+    assert told == [
+        ({0x7267: {"available": True}}, True),
+        ({0x0219: {"access": "writeOnly"}}, False),
+        ({}, True),
+    ]
+
+
 async def test_a_frame_holding_nothing_readable_is_passed_over(
     session: aiohttp.ClientSession,
 ) -> None:

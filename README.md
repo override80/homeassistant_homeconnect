@@ -446,6 +446,15 @@ programme is the appliance's own stop command rather than emptying
 the programme slot, which comes to the same thing but is only offered by an
 appliance that describes that command.
 
+The description file is not the last word on what an appliance offers. A
+washer or dryer writes every one of its programmes there as unavailable and
+turns on the ones it offers once it is talked to, and it marks some commands,
+pause and resume among them, as ones it will not take. What the appliance says
+on top of the file is read as it says it, so the programmes, the options that
+come with each, and the command buttons follow what it will take at the
+moment. A command it is not taking shows as unavailable rather than failing
+when pressed.
+
 A programme is not a value. An appliance keeps one programme it is running
 and one it is set to run, and reports which by number along with everything
 else it holds, but each of the two is a slot of its own that takes only the

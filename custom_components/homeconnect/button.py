@@ -179,6 +179,10 @@ class CommandButton(HomeConnectButton):
         appliance = self.appliance
         if not super().available or appliance is None:
             return False
+        # Reached directly, a command comes and goes with what the appliance
+        # says it will take at the moment.
+        if self._key not in appliance.model.commands:
+            return False
         wanted = WHEN.get(self._key)
         if wanted is None:
             return True

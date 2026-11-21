@@ -202,6 +202,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HomeConnectConfigEntry) 
             coordinator.apply_locally,
             coordinator.set_talking,
             identity,
+            coordinator.described_locally,
         )
         await local.load()
         failed = await _learn(api, local)

@@ -167,7 +167,9 @@ def describe(entries: dict[int, Entry]) -> Described:
             described.settings[entry.key] = _feature(entry, SETTING)
         elif kind == OPTION:
             options.setdefault(entry.under, {})[entry.key] = entry
-        elif kind == "command":
+        elif kind == "command" and entry.available and entry.writable:
+            # One written "none" is refused until the appliance turns it on,
+            # which a washer does for pause and resume only while running.
             commands.append(entry.key)
         elif entry.kind == "program" and entry.available:
             programs[entry.uid] = entry.key
@@ -184,6 +186,41 @@ def describe(entries: dict[int, Entry]) -> Described:
     described.commands = tuple(sorted(commands))
     described.programs = tuple(sorted(programs.values()))
     return described
+
+
+def _said_figure(said: Any, was: float | None) -> float | None:
+    if isinstance(said, (int, float)) and not isinstance(said, bool):
+        return float(said)
+    return was
+
+
+def changed(
+    entries: dict[int, Entry], changes: dict[int, dict[str, Any]]
+) -> dict[int, Entry]:
+    """A description with what the appliance has since said laid over it.
+
+    Only the parts a change names move, and only when they read as what the
+    description file would have written there. A number the file never
+    described has nothing to change and is passed over.
+    """
+    moved = dict(entries)
+    for uid, said in changes.items():
+        entry = moved.get(uid)
+        if entry is None:
+            continue
+        available = said.get("available")
+        access = said.get("access")
+        execution = said.get("execution")
+        moved[uid] = replace(
+            entry,
+            available=available if isinstance(available, bool) else entry.available,
+            access=access if isinstance(access, str) else entry.access,
+            minimum=_said_figure(said.get("min"), entry.minimum),
+            maximum=_said_figure(said.get("max"), entry.maximum),
+            step=_said_figure(said.get("stepSize"), entry.step),
+            execution=execution if isinstance(execution, str) else entry.execution,
+        )
+    return moved
 
 
 @dataclass
@@ -460,6 +497,7 @@ class LocalControl:
         on_values: Callable[[str, dict[int, Any]], None],
         on_connected: Callable[[str, bool], None],
         identity: str = "homeassistant",
+        on_described: Callable[[str], None] | None = None,
     ) -> None:
         self._hass = hass
         # Who this says it is to every appliance. One connection is allowed
@@ -472,7 +510,11 @@ class LocalControl:
         self._store = store
         self._on_values = on_values
         self._on_connected = on_connected
+        self._on_described = on_described
         self._known: dict[str, Known] = {}
+        # Each description as the appliance says it stands now. Never
+        # written down: it is asked for again on every connection.
+        self._live: dict[str, dict[int, Entry]] = {}
         self._links: dict[str, Any] = {}
         self._finder = Finder(hass, self._look_again)
         self._spawn: Callable[[Any], Any] | None = None
@@ -584,8 +626,29 @@ class LocalControl:
         return haid in self._known and (self._only is None or haid in self._only)
 
     def entries(self, haid: str) -> dict[int, Entry]:
+        live = self._live.get(haid)
+        if live is not None:
+            return live
         known = self._known.get(haid)
         return known.entries if known else {}
+
+    def described_changes(
+        self, haid: str, changes: dict[int, dict[str, Any]], whole: bool
+    ) -> None:
+        """What one appliance has said about how its description stands."""
+        known = self._known.get(haid)
+        if known is None:
+            return
+        under = known.entries if whole else self.entries(haid)
+        self._live[haid] = changed(under, changes)
+        _LOGGER.debug(
+            "%s says its description now stands %s: %s",
+            hidden_id(haid),
+            "as a whole" if whole else "changed",
+            changes,
+        )
+        if self._on_described is not None:
+            self._on_described(haid)
 
     def described(self, haid: str) -> Described:
         return describe(self.entries(haid))
@@ -680,6 +743,9 @@ class LocalControl:
             lambda talking: self._on_connected(haid, talking),
             identifier=self._identity,
             port=where.port,
+            on_described=lambda changes, whole: self.described_changes(
+                haid, changes, whole
+            ),
         )
 
     async def write(self, haid: str, key: str, value: Any) -> None:

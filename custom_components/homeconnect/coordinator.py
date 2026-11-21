@@ -312,6 +312,9 @@ class HomeConnectCoordinator(DataUpdateCoordinator[dict[str, Appliance]]):
         """Read back what was learnt about these models last time."""
         stored = await self._store.async_load() or {}
         for name, description in stored.items():
+            if name.startswith("local:"):
+                # Kept by a release that shared these between appliances.
+                continue
             model = Model.from_stored(description)
             if model is not None:
                 self._models[name] = model
@@ -489,12 +492,7 @@ class HomeConnectCoordinator(DataUpdateCoordinator[dict[str, Appliance]]):
         local = self.local
         assert local is not None
         haid = appliance.id
-        described = local.described(haid)
-        appliance.model.settings = described.settings
-        appliance.model.options = described.options
-        appliance.model.commands = described.commands
-        appliance.model.described = local.knows(haid)
-        appliance.programs = described.programs
+        self._describe_locally(appliance, local)
         appliance.connected = local.talking(haid)
         if held is not None:
             appliance.status = held.status
@@ -505,6 +503,25 @@ class HomeConnectCoordinator(DataUpdateCoordinator[dict[str, Appliance]]):
             appliance.active = held.active
             appliance.selected = held.selected
         return appliance
+
+    @staticmethod
+    def _describe_locally(appliance: Appliance, local: LocalControl) -> None:
+        described = local.described(appliance.id)
+        appliance.model.settings = described.settings
+        appliance.model.options = described.options
+        appliance.model.commands = described.commands
+        appliance.model.described = local.knows(appliance.id)
+        appliance.programs = described.programs
+
+    @callback
+    def described_locally(self, haid: str) -> None:
+        """One appliance has said its description now stands differently."""
+        appliance = (self.data or {}).get(haid)
+        local = self.local
+        if appliance is None or local is None:
+            return
+        self._describe_locally(appliance, local)
+        self.async_set_updated_data(self.data)
 
     @callback
     def apply_locally(self, haid: str, values: dict[int, Any]) -> None:
@@ -601,11 +618,14 @@ class HomeConnectCoordinator(DataUpdateCoordinator[dict[str, Appliance]]):
         answer does not change, so they share one description and it is filled
         in once. An appliance with no model number stands for itself. One
         reached directly is described by what was learnt for it rather than
-        by the cloud, so it never shares with one the cloud describes.
+        by the cloud, and stands for itself: its description moves with what
+        it is doing, which two of the same model need not be doing together.
+        It is made afresh from what was learnt on every read, so it is not
+        kept either.
         """
-        name = str(described.get("enumber") or haid)
         if locally:
-            name = f"local:{name}"
+            return Model()
+        name = str(described.get("enumber") or haid)
         model = self._models.get(name)
         if model is None:
             model = Model()

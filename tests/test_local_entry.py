@@ -392,6 +392,51 @@ async def test_what_the_appliance_pushes_reaches_the_entities(
     assert state_of(hass, "switch.washer_child_lock") == "on"
 
 
+async def test_what_the_appliance_says_of_its_description_reaches_the_entities(
+    hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
+) -> None:
+    """A washer turns its programmes and its pause on and off as it goes, and
+    what is offered follows it rather than the file learnt once."""
+    made, _ = talking
+    coordinator = made.runtime_data.coordinator
+    control = coordinator.local
+    assert control is not None
+    assert state_of(hass, "button.washer_acknowledge_event") != "unavailable"
+    # 0x0109 is the one programme, 0x0104 the one command.
+    control.described_changes(
+        HAID, {0x0109: {"available": False}, 0x0104: {"access": "none"}}, whole=True
+    )
+    await hass.async_block_till_done()
+    assert coordinator.data[HAID].programs == ()
+    assert state_of(hass, "button.washer_acknowledge_event") == "unavailable"
+
+    control.described_changes(HAID, {0x0104: {"access": "writeOnly"}}, whole=False)
+    await hass.async_block_till_done()
+    assert coordinator.data[HAID].programs == ()
+    assert state_of(hass, "button.washer_acknowledge_event") != "unavailable"
+
+    # A poll rebuilds the appliance from what is held, and keeps what was said.
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data[HAID].programs == ()
+
+
+async def test_two_of_one_model_reached_directly_are_described_apart(
+    hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
+) -> None:
+    """What one is offered moves with what it is doing, so a second of the
+    same model running something else must not take it over."""
+    made, _ = talking
+    coordinator = made.runtime_data.coordinator
+    described = {"enumber": "WAV28MH0GB/01"}
+    one = coordinator._model("BOSCH-A-1", described, True)
+    other = coordinator._model("BOSCH-B-1", described, True)
+    assert one is not other
+    assert coordinator._model("BOSCH-A-1", described, False) is coordinator._model(
+        "BOSCH-B-1", described, False
+    )
+
+
 async def test_setting_something_goes_down_the_appliance_connection(
     hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
 ) -> None:

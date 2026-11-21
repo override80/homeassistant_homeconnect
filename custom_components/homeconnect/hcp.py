@@ -80,7 +80,13 @@ SERVICES = "/ci/services"
 AUTHENTICATION = "/ci/authentication"
 VALUES = "/ro/values"
 EVERYTHING = "/ro/allMandatoryValues"
+# How the description file stands now. A washer writes every programme
+# unavailable there and only turns the ones it offers on through these, and a
+# command it will take only while running is turned on the same way. The
+# first is everything that differs from the file, asked for on connect; the
+# second is each later change on its own.
 DESCRIPTIONS = "/ro/allDescriptionChanges"
+CHANGES = "/ro/descriptionChange"
 # Where a programme is put. An appliance keeps one in each of these and
 # reports which by number among its values, but a programme is not a value:
 # each slot is a port of its own, and only a POST to the port's own resource
@@ -275,6 +281,7 @@ class HcpLink:
         on_connected: Callable[[bool], None],
         identifier: str = "homeassistant",
         port: int | None = None,
+        on_described: Callable[[dict[int, dict[str, Any]], bool], None] | None = None,
     ) -> None:
         self._session = session
         self._host = host
@@ -287,6 +294,7 @@ class HcpLink:
         self._sealed = Sealed(self._psk, _key(iv)) if iv else None
         self._on_values = on_values
         self._on_connected = on_connected
+        self._on_described = on_described
         self._identifier = identifier
         self._socket: aiohttp.ClientWebSocketResponse | None = None
         self._sid: int | None = None
@@ -436,6 +444,8 @@ class HcpLink:
             return
         if action in (RESPONSE, NOTIFY) and resource in (VALUES, EVERYTHING):
             self._values(said.get("data"))
+        elif action in (RESPONSE, NOTIFY) and resource in (DESCRIPTIONS, CHANGES):
+            self._described(said.get("data"), resource == DESCRIPTIONS)
 
     async def _begin(self, said: dict[str, Any]) -> None:
         """Take up the conversation the appliance has just opened.
@@ -486,6 +496,22 @@ class HcpLink:
         }
         if held:
             self._on_values(held)
+
+    def _described(self, data: Any, whole: bool) -> None:
+        """What has changed in the description, by the number of each.
+
+        Whole is the answer to asking for every change, which stands in for
+        whatever was said before; otherwise it is one change on top of them.
+        """
+        if not isinstance(data, list) or self._on_described is None:
+            return
+        changes = {
+            int(one["uid"]): {k: v for k, v in one.items() if k != "uid"}
+            for one in data
+            if isinstance(one, dict) and isinstance(one.get("uid"), int)
+        }
+        if changes or whole:
+            self._on_described(changes, whole)
 
     async def _reply(self, said: dict[str, Any], data: Any) -> None:
         await self._write(
