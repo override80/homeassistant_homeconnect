@@ -48,7 +48,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import names
 from .capability import leaf
-from .coordinator import OPERATION_STATE, HomeConnectCoordinator
+from .coordinator import ABORT, OPERATION_STATE, HomeConnectCoordinator
 from .entity import HomeConnectEntity, follow
 from .errors import HomeConnectError
 
@@ -141,7 +141,14 @@ class StopButton(HomeConnectButton):
     @property
     def available(self) -> bool:
         appliance = self.appliance
-        return super().available and appliance is not None and appliance.running
+        if not super().available or appliance is None or not appliance.running:
+            return False
+        # Reached directly, stopping is the abort command, which a hob keeps
+        # locked even while it is running. The cloud empties the slot instead.
+        return (
+            not self.coordinator.reached_locally(self._haid)
+            or ABORT in appliance.model.commands
+        )
 
     async def async_press(self) -> None:
         await self._asking(self.coordinator.stop_program(self._haid))

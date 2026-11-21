@@ -421,6 +421,39 @@ async def test_what_the_appliance_says_of_its_description_reaches_the_entities(
     assert coordinator.data[HAID].programs == ()
 
 
+async def test_stopping_is_offered_only_while_the_appliance_takes_abort(
+    hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
+) -> None:
+    """Reached directly, stopping is the abort command, and a hob keeps that
+    locked even while it is running."""
+    made, link = talking
+    coordinator = made.runtime_data.coordinator
+    control = coordinator.local
+    assert control is not None
+    abort = 0x0200
+    control._known[HAID].entries[abort] = iddf.Entry(
+        abort, "command", "BSH.Common.Command.AbortProgram", access="none"
+    )
+    control.described_changes(HAID, {}, whole=True)
+    # 0x0107 is the active programme slot, 0x0109 the one programme there is.
+    coordinator.apply_locally(HAID, {0x0107: 0x0109})
+    await hass.async_block_till_done()
+    assert state_of(hass, "button.washer_stop_programme") == "unavailable"
+
+    control.described_changes(HAID, {abort: {"access": "WRITEONLY"}}, whole=False)
+    await hass.async_block_till_done()
+    assert state_of(hass, "button.washer_stop_programme") != "unavailable"
+    await hass.services.async_call(
+        "button", "press", {"entity_id": "button.washer_stop_programme"}, blocking=True
+    )
+    assert link.written == [(abort, True)]
+
+    # Running, but the abort command locked again, as the hob does.
+    control.described_changes(HAID, {abort: {"access": "NONE"}}, whole=False)
+    await hass.async_block_till_done()
+    assert state_of(hass, "button.washer_stop_programme") == "unavailable"
+
+
 async def test_two_of_one_model_reached_directly_are_described_apart(
     hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
 ) -> None:

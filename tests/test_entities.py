@@ -274,6 +274,20 @@ async def test_starting_is_offered_and_stopping_is_not(
     assert stop is not None and stop.state == "unavailable"
 
 
+async def test_stopping_through_the_cloud_needs_no_abort_command(
+    hass: HomeAssistant, washer: MockConfigEntry
+) -> None:
+    """The cloud stops a programme by emptying the slot, so whether the abort
+    command is on offer says nothing about it."""
+    coordinator = washer.runtime_data.coordinator
+    appliance = next(iter(coordinator.data.values()))
+    appliance.model.commands = ()
+    appliance.active = "LaundryCare.Washer.Program.Cotton"
+    coordinator.async_set_updated_data(coordinator.data)
+    await hass.async_block_till_done()
+    assert state_of(hass, "button.washer_stop_programme") != "unavailable"
+
+
 async def test_pausing_is_not_offered_while_nothing_is_running(
     hass: HomeAssistant, washer: MockConfigEntry
 ) -> None:

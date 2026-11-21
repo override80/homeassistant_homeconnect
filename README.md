@@ -453,8 +453,12 @@ pause and resume among them, as ones it will not take. What the appliance says
 on top of the file about its programmes and commands is read as it says it,
 so the programmes, the options that come with each, and the command buttons
 follow what it will take at the moment. A command it is not taking shows as
-unavailable rather than failing when pressed. Settings and options keep what
-the file says, since whether one can be written decides which entity it is.
+unavailable rather than failing when pressed, and that includes the stop
+button, since stopping is the stop command: the hob tried here (EX651HEC1E)
+keeps it locked even while it is running, so there the programme is stopped
+at the hob itself. Settings and
+options keep what the file says, since whether one can be written decides
+which entity it is.
 
 A programme is not a value. An appliance keeps one programme it is running
 and one it is set to run, and reports which by number along with everything
