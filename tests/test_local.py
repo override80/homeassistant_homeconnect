@@ -160,21 +160,37 @@ def test_a_change_moves_only_what_it_names() -> None:
     changed = local.changed(
         entries,
         {
-            FINISH_IN: {"max": 43200, "stepSize": 300},
+            # Written in capitals by a real appliance.
+            PAUSE: {"parentUID": 0, "access": "WRITEONLY"},
             # Not what a description would write there, so left alone.
             ECO: {"available": "true", "access": 3},
             # A number never described has nothing to change.
             0xBEEF: {"available": True},
         },
     )
-    assert changed[FINISH_IN].maximum == 43200
-    assert changed[FINISH_IN].step == 300
-    assert changed[FINISH_IN].minimum == 0
-    assert changed[FINISH_IN].access == "none"
+    assert changed[PAUSE].writable
+    assert changed[PAUSE].available
     assert changed[ECO] == entries[ECO]
     assert 0xBEEF not in changed
     # What was learnt is not touched.
-    assert entries[FINISH_IN].maximum == 86400
+    assert not entries[PAUSE].writable
+
+
+def test_a_setting_or_option_keeps_what_the_file_says() -> None:
+    """Whether one can be written decides which entity it is. A hob locks two
+    of its settings once connected, which read over the file would have made
+    a sensor of a select and a binary sensor of a switch, each beside the
+    entity it had."""
+    entries = _like_a_washer()
+    changes = {
+        0x0102: {"parentUID": 259, "available": False, "access": "NONE"},
+        FINISH_IN: {"access": "READWRITE", "max": 43200},
+    }
+    changed = local.changed(entries, changes)
+    assert changed[0x0102] == entries[0x0102]
+    assert changed[FINISH_IN] == entries[FINISH_IN]
+    child_lock = local.describe(changed).settings["BSH.Common.Setting.ChildLock"]
+    assert platform_for(child_lock) is SWITCH
 
 
 def _told_into(told: list[str]) -> local.LocalControl:

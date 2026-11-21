@@ -450,10 +450,11 @@ The description file is not the last word on what an appliance offers. A
 washer or dryer writes every one of its programmes there as unavailable and
 turns on the ones it offers once it is talked to, and it marks some commands,
 pause and resume among them, as ones it will not take. What the appliance says
-on top of the file is read as it says it, so the programmes, the options that
-come with each, and the command buttons follow what it will take at the
-moment. A command it is not taking shows as unavailable rather than failing
-when pressed.
+on top of the file about its programmes and commands is read as it says it,
+so the programmes, the options that come with each, and the command buttons
+follow what it will take at the moment. A command it is not taking shows as
+unavailable rather than failing when pressed. Settings and options keep what
+the file says, since whether one can be written decides which entity it is.
 
 A programme is not a value. An appliance keeps one programme it is running
 and one it is set to run, and reports which by number along with everything

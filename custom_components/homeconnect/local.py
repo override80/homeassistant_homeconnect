@@ -188,10 +188,10 @@ def describe(entries: dict[int, Entry]) -> Described:
     return described
 
 
-def _said_figure(said: Any, was: float | None) -> float | None:
-    if isinstance(said, (int, float)) and not isinstance(said, bool):
-        return float(said)
-    return was
+# What a change is taken for. A setting or an option keeps what the file says:
+# whether it can be written decides which entity it is, and a hob locks two of
+# its settings once connected, which would make a second entity of each.
+CHANGEABLE = frozenset({"program", "command"})
 
 
 def changed(
@@ -199,26 +199,22 @@ def changed(
 ) -> dict[int, Entry]:
     """A description with what the appliance has since said laid over it.
 
-    Only the parts a change names move, and only when they read as what the
-    description file would have written there. A number the file never
-    described has nothing to change and is passed over.
+    Only whether a programme or a command is on offer moves, and only when
+    the change reads as what the description file would have written there.
+    A number the file never described has nothing to change and is passed
+    over.
     """
     moved = dict(entries)
     for uid, said in changes.items():
         entry = moved.get(uid)
-        if entry is None:
+        if entry is None or entry.kind not in CHANGEABLE:
             continue
         available = said.get("available")
         access = said.get("access")
-        execution = said.get("execution")
         moved[uid] = replace(
             entry,
             available=available if isinstance(available, bool) else entry.available,
             access=access if isinstance(access, str) else entry.access,
-            minimum=_said_figure(said.get("min"), entry.minimum),
-            maximum=_said_figure(said.get("max"), entry.maximum),
-            step=_said_figure(said.get("stepSize"), entry.step),
-            execution=execution if isinstance(execution, str) else entry.execution,
         )
     return moved
 
