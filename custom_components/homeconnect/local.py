@@ -52,7 +52,7 @@ from .capability import OPTION, SETTING, STATUS, Feature, Reading
 from .content import content
 from .errors import HomeConnectError
 from .hcp import readable
-from .http import hidden_id
+from .http import bare_id, hidden_id
 from .iddf import Entry, named_value, uids_by_key, unpack
 from .measures import unit_of
 
@@ -348,8 +348,10 @@ class Finder:
     def where(self, haid: str) -> Where | None:
         """Where an appliance is, if it has been heard from."""
         wanted = _plainly(haid)
+        # An appliance may shout its id without the account's trailing index.
+        bare = _plainly(bare_id(haid))
         for shouted, where in self._found.items():
-            if wanted in shouted or shouted in wanted:
+            if wanted in shouted or shouted in wanted or bare in shouted:
                 return where
         return None
 

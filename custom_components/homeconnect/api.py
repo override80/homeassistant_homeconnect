@@ -65,7 +65,7 @@ from .errors import (
     HomeConnectRefused,
     HomeConnectTooManyRequests,
 )
-from .http import failure, hidden_id, redact_url
+from .http import bare_id, failure, hidden_id, redact_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -512,6 +512,27 @@ class HomeConnectAccount:
             or HomeConnectConnectionError(f"nothing answered for {redact_url(path)}")
         )
 
+    async def _fetch_for(self, haid: str, path: str, binary: bool = False) -> Any:
+        """Ask for something kept under an appliance's id, under either form of it.
+
+        Some appliances are filed under the id they report themselves, which
+        is the account's id without its trailing index, and the account's own
+        id gets a refusal or a 404 for them. So the account's id is asked
+        first, as before, and the shorter one only when that does not answer.
+        What is raised is the last thing that was not a refusal of the token,
+        since a refusal on one form of the id says nothing about the other.
+        """
+        refused: HomeConnectAuthError | None = None
+        last: HomeConnectError | None = None
+        for one in dict.fromkeys((haid, bare_id(haid))):
+            try:
+                return await self._fetch(path.format(one), binary=binary)
+            except HomeConnectAuthError as err:
+                refused = err
+            except HomeConnectError as err:
+                last = err
+        raise last or refused or HomeConnectConnectionError("nothing was asked")
+
     async def keys(self, haids: list[str]) -> dict[str, dict[str, str]]:
         """The key each appliance is reached directly with, by appliance.
 
@@ -525,7 +546,7 @@ class HomeConnectAccount:
         found: dict[str, dict[str, str]] = {}
         for haid in haids:
             try:
-                answer = await self._fetch(ENCRYPTION_PATH.format(haid))
+                answer = await self._fetch_for(haid, ENCRYPTION_PATH)
             except HomeConnectAuthError:
                 # The token is the account's rather than the appliance's, so
                 # being refused once is being refused for all of them, and
@@ -543,7 +564,7 @@ class HomeConnectAccount:
 
     async def description(self, haid: str) -> bytes:
         """One appliance's description of itself, as it was sent."""
-        found = await self._fetch(DESCRIPTION_PATH.format(haid), binary=True)
+        found = await self._fetch_for(haid, DESCRIPTION_PATH, binary=True)
         if not isinstance(found, bytes):
             raise HomeConnectConnectionError("the description came back empty")
         return found
