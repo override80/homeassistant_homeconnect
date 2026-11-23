@@ -277,6 +277,10 @@ def feature(node: Mapping[str, Any], kind: str) -> Feature | None:
     )
 
 
+# The one setting that is offered whatever its description says about writing.
+POWER_STATE = "BSH.Common.Setting.PowerState"
+
+
 def platform_for(found: Feature) -> str | None:
     """What kind of entity a feature becomes, or nothing if it becomes none.
 
@@ -286,8 +290,15 @@ def platform_for(found: Feature) -> str | None:
     be written and then describes nothing at all is left as a reading, since
     an entity that cannot know what it would be allowed to send is an entity
     that only ever earns a refusal.
+
+    The power state is the exception. A washing machine and an oven describe
+    theirs as read-only, and then take a change to standby while they are on,
+    which is what the appliance's own app and the local protocol do. Offering
+    it as a reading only would leave no way to put them to sleep, so it is
+    offered as something to set whenever it has values to choose from, and the
+    appliance gets to refuse when it will not.
     """
-    if found.writable:
+    if found.writable or (found.key == POWER_STATE and len(found.values) >= 2):
         if found.boolean or found.switchable:
             return SWITCH
         if found.values:

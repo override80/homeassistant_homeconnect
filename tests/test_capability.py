@@ -126,6 +126,54 @@ def test_standby_as_well_as_off_is_a_choice_of_three() -> None:
     assert platform_for(found) is SELECT
 
 
+def test_a_power_state_described_as_read_only_is_still_offered_to_set() -> None:
+    """A washing machine describes it read-only and takes standby all the same."""
+    washer = feature(
+        {
+            "key": "BSH.Common.Setting.PowerState",
+            "constraints": {
+                "allowedvalues": [
+                    "BSH.Common.EnumType.PowerState.MainsOff",
+                    "BSH.Common.EnumType.PowerState.On",
+                    "BSH.Common.EnumType.PowerState.Standby",
+                ],
+                "access": "read",
+            },
+        },
+        SETTING,
+    )
+    assert washer is not None
+    assert not washer.writable
+    assert platform_for(washer) is SELECT
+    oven = feature(
+        {
+            "key": "BSH.Common.Setting.PowerState",
+            "constraints": {
+                "allowedvalues": [
+                    "BSH.Common.EnumType.PowerState.On",
+                    "BSH.Common.EnumType.PowerState.Standby",
+                ],
+                "access": "read",
+            },
+        },
+        SETTING,
+    )
+    assert oven is not None
+    assert platform_for(oven) is SWITCH
+
+
+def test_another_read_only_choice_stays_a_reading() -> None:
+    found = feature(
+        {
+            "key": "K",
+            "constraints": {"allowedvalues": ["A", "B", "C"], "access": "read"},
+        },
+        SETTING,
+    )
+    assert found is not None
+    assert platform_for(found) is SENSOR
+
+
 def test_a_range_is_a_number() -> None:
     found = feature(
         {
