@@ -158,8 +158,8 @@ async def test_an_appliance_with_no_key_is_left_out_rather_than_stopping_the_res
     }
 
 
-OVEN = "SIEMENS-HR578G5S6-68A40EA930C4-001"
-OVEN_SELF = "SIEMENS-HR578G5S6-68A40EA930C4"
+OVEN = "SIEMENS-HR578G5S6-1234567890AB-001"
+OVEN_SELF = "SIEMENS-HR578G5S6-1234567890AB"
 
 
 async def test_a_key_kept_under_the_id_the_appliance_reports_is_found(

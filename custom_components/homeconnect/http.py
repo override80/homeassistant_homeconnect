@@ -264,7 +264,7 @@ def failure(payload: Any) -> tuple[str | None, str]:
 def bare_id(haid: str) -> str:
     """An appliance id without the index the account puts on the end of it.
 
-    The account lists an oven as ``SIEMENS-HR578G5S6-68A40EA930C4-001``, while
+    The account lists an oven as ``SIEMENS-HR578G5S6-1234567890AB-001``, while
     the oven names itself, to the account's service and on the network, without
     the ``-001``. Anything keyed by what the appliance calls itself has to be
     asked for or matched by this form as well. An id with no such index comes

@@ -781,6 +781,6 @@ async def test_an_appliance_shouting_its_id_without_the_index_is_still_found(
 ) -> None:
     finder = local.Finder(hass, lambda: None)
     where = local.Where("10.0.0.7", 80)
-    finder._found[local._plainly("Oven SIEMENS-HR578G5S6-68A40EA930C4.local.")] = where
-    assert finder.where("SIEMENS-HR578G5S6-68A40EA930C4-001") == where
+    finder._found[local._plainly("Oven SIEMENS-HR578G5S6-1234567890AB.local.")] = where
+    assert finder.where("SIEMENS-HR578G5S6-1234567890AB-001") == where
     assert finder.where("SIEMENS-OTHER-1122334455-001") is None
