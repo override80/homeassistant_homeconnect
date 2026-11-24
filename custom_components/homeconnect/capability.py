@@ -287,7 +287,7 @@ def feature(node: Mapping[str, Any], kind: str) -> Feature | None:
     )
 
 
-# The one setting that is offered whatever its description says about writing.
+# The one setting offered to set whatever its description says about writing.
 POWER_STATE = "BSH.Common.Setting.PowerState"
 
 
@@ -304,11 +304,14 @@ def platform_for(found: Feature) -> str | None:
     The power state is the exception. A washing machine and an oven describe
     theirs as read-only, and then take a change to standby while they are on,
     which is what the appliance's own app and the local protocol do. Offering
-    it as a reading only would leave no way to put them to sleep, so it is
-    offered as something to set whenever it has values to choose from, and the
-    appliance gets to refuse when it will not.
+    it as a reading only would leave no way to put them to sleep, so one with
+    values to choose from is offered as something to set where the appliance
+    says as it goes whether it will take it. The cloud describes it once, so
+    there it stays a reading rather than a control that is never available.
     """
-    if found.writable or (found.key == POWER_STATE and len(found.values) >= 2):
+    if found.writable or (
+        found.key == POWER_STATE and found.live is not None and len(found.values) >= 2
+    ):
         if found.boolean or found.switchable:
             return SWITCH
         if found.values:
