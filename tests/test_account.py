@@ -158,6 +158,59 @@ async def test_an_appliance_with_no_key_is_left_out_rather_than_stopping_the_res
     }
 
 
+OVEN = "SIEMENS-HR578G5S6-1234567890AB-001"
+OVEN_SELF = "SIEMENS-HR578G5S6-1234567890AB"
+
+
+async def test_a_key_kept_under_the_id_the_appliance_reports_is_found(
+    aioclient_mock: AiohttpClientMocker, session: aiohttp.ClientSession
+) -> None:
+    """The account lists an oven with a trailing index that the oven leaves off
+    when it names itself, and the key is filed under the shorter one."""
+    for host in (EU, NA):
+        aioclient_mock.get(f"{host}{key_of(OVEN)}", status=404, json={})
+    aioclient_mock.get(f"{EU}{key_of(OVEN_SELF)}", json=SEALED)
+    account = HomeConnectAccount(api_for(session))
+    assert await account.keys([OVEN]) == {
+        OVEN: {"key": "another-key", "iv": "a-vector"}
+    }
+
+
+async def test_the_account_s_own_id_is_asked_first(
+    aioclient_mock: AiohttpClientMocker, session: aiohttp.ClientSession
+) -> None:
+    """An appliance the account's id works for costs no second request."""
+    aioclient_mock.get(f"{EU}{key_of(OVEN)}", json=SECURED)
+    aioclient_mock.get(f"{EU}{key_of(OVEN_SELF)}", json=SEALED)
+    account = HomeConnectAccount(api_for(session))
+    assert await account.keys([OVEN]) == {OVEN: {"key": "a-shared-key"}}
+    assert aioclient_mock.call_count == 1
+
+
+async def test_a_refusal_on_the_account_s_id_still_tries_the_shorter_one(
+    aioclient_mock: AiohttpClientMocker, session: aiohttp.ClientSession
+) -> None:
+    """The description of the oven is refused under the account's id."""
+    for host in (EU, NA):
+        aioclient_mock.get(f"{host}/api/iddf/v1/iddf/{OVEN}", status=403)
+    aioclient_mock.get(
+        f"{EU}/api/iddf/v1/iddf/{OVEN_SELF}", content=b"PK\x03\x04 an oven"
+    )
+    account = HomeConnectAccount(api_for(session))
+    assert await account.description(OVEN) == b"PK\x03\x04 an oven"
+
+
+async def test_a_token_refused_for_every_form_of_the_id_is_still_a_refusal(
+    aioclient_mock: AiohttpClientMocker, session: aiohttp.ClientSession
+) -> None:
+    for haid in (OVEN, OVEN_SELF):
+        for host in (EU, NA):
+            aioclient_mock.get(f"{host}{key_of(haid)}", status=401)
+    account = HomeConnectAccount(api_for(session))
+    with pytest.raises(HomeConnectAuthError):
+        await account.keys([OVEN])
+
+
 async def test_nothing_kept_for_an_appliance_is_not_a_failure(
     aioclient_mock: AiohttpClientMocker, session: aiohttp.ClientSession
 ) -> None:
