@@ -454,6 +454,26 @@ async def test_stopping_is_offered_only_while_the_appliance_takes_abort(
     assert state_of(hass, "button.washer_stop_programme") == "unavailable"
 
 
+async def test_a_setting_locked_as_it_goes_is_unavailable_and_stays_put(
+    hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
+) -> None:
+    """A hob locks settings once connected. The switch stays a switch and is
+    unavailable while locked, rather than offered and then refused."""
+    made, _ = talking
+    control = made.runtime_data.coordinator.local
+    assert control is not None
+    assert state_of(hass, "switch.washer_child_lock") != "unavailable"
+    # 0x0102 is the child lock.
+    control.described_changes(HAID, {0x0102: {"access": "NONE"}}, whole=True)
+    await hass.async_block_till_done()
+    assert state_of(hass, "switch.washer_child_lock") == "unavailable"
+    assert hass.states.get("binary_sensor.washer_child_lock") is None
+
+    control.described_changes(HAID, {0x0102: {"access": "READWRITE"}}, whole=False)
+    await hass.async_block_till_done()
+    assert state_of(hass, "switch.washer_child_lock") != "unavailable"
+
+
 async def test_two_of_one_model_reached_directly_are_described_apart(
     hass: HomeAssistant, talking: tuple[MockConfigEntry, Stub]
 ) -> None:

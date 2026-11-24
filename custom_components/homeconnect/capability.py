@@ -147,6 +147,11 @@ class Feature:
     unit: str | None = None
     type: str = ""
     access: str = "read"
+    # What it says of writing it right now, for an appliance that says so as
+    # it goes. Only one reached directly does; the cloud describes a setting
+    # once. Access stays what decides the entity, so that one does not move
+    # from platform to platform as the appliance locks and unlocks it.
+    live: str | None = None
     # The values it will take, and what the cloud calls each of them. The
     # cloud translates those names and this does not, so they are worth
     # keeping even though a name can be worked out from the key.
@@ -161,6 +166,11 @@ class Feature:
     @property
     def writable(self) -> bool:
         return "write" in self.access.lower()
+
+    @property
+    def writable_now(self) -> bool:
+        """Whether it can be written at the moment, where that is known."""
+        return "write" in (self.live or self.access).lower()
 
     @property
     def boolean(self) -> bool:

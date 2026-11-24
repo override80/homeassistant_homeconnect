@@ -458,7 +458,9 @@ button, since stopping is the stop command: the hob tried here (EX651HEC1E)
 keeps it locked even while it is running, so there the programme is stopped
 at the hob itself. Settings and
 options keep what the file says, since whether one can be written decides
-which entity it is.
+which entity it is. A setting the appliance locks for the moment, as the hob
+does with two of its own once connected, stays the same entity and is
+unavailable until it is unlocked.
 
 A programme is not a value. An appliance keeps one programme it is running
 and one it is set to run, and reports which by number along with everything

@@ -285,7 +285,7 @@ class SettableEntity(KeyEntity):
         if described is not None and self._key == POWER_STATE:
             # Described as read-only by some appliances, which still take it.
             return True
-        return described is not None and described.writable
+        return described is not None and described.writable_now
 
     async def apply(self, value: Any) -> None:
         """Send a value back to the appliance.
